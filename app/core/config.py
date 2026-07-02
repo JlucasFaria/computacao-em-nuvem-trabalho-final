@@ -42,7 +42,7 @@ class Settings(BaseSettings):
         default="development",
         description="Ambiente de execução. Controla logs, HSTS, etc.",
     )
-    app_name: str = Field(default="CloudTask AI SaaS")
+    app_name: str = Field(default="TaskFlow AI")
     app_port: int = Field(default=8000, ge=1, le=65535)
     log_level: str = Field(default="INFO")
 

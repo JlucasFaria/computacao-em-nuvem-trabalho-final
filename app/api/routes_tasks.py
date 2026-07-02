@@ -15,12 +15,12 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.db.models import Task
-from app.db.schemas import TaskCreate, TaskRead, TaskUpdate
+from app.db.models import Task, TaskPriority, TaskStatus
+from app.db.schemas import TaskCreate, TaskRead, TaskStats, TaskUpdate
 from app.services.dynamodb_service import EventStoreError, get_event_store
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -138,6 +138,62 @@ def list_tasks(
     # memória e travar a API. limit/skip mantêm a resposta sob controle.
     stmt = select(Task).order_by(Task.id).offset(skip).limit(limit)
     return list(db.scalars(stmt).all())
+
+
+STATS_DESCRIPTION = """\
+Devolve um **resumo agregado** de todas as tarefas: total geral e contagem por
+`status` e por `priority`. Útil como base de um dashboard.
+
+```bash
+curl http://localhost:8000/tasks/stats -H "Authorization: Bearer <token>"
+# {"total":7,"by_status":{"pending":3,"in_progress":2,"done":2},
+#  "by_priority":{"low":1,"medium":4,"high":2}}
+```
+
+> Endpoint EXTRA (além do CRUD da base) — adicionado como diferencial do projeto.
+"""
+
+
+@router.get(
+    "/stats",
+    response_model=TaskStats,
+    summary="Estatísticas das tarefas",
+    description=STATS_DESCRIPTION,
+    response_description="Total e contagem por status e prioridade.",
+)
+def task_stats(db: Session = Depends(get_db)) -> TaskStats:
+    """Agrega as tarefas por status e por prioridade.
+
+    IMPORTANTE (ordem das rotas): este endpoint é declarado ANTES de
+    ``/tasks/{task_id}``. Se viesse depois, o FastAPI casaria ``/tasks/stats``
+    com a rota ``/{task_id}`` e tentaria converter ``"stats"`` em ``int`` — 422.
+
+    Returns:
+        TaskStats: total geral + dicionários de contagem por status/prioridade.
+    """
+    # COUNT + GROUP BY no banco: uma varredura só, devolve apenas o resumo.
+    status_rows = db.execute(
+        select(Task.status, func.count()).group_by(Task.status)
+    ).all()
+    priority_rows = db.execute(
+        select(Task.priority, func.count()).group_by(Task.priority)
+    ).all()
+
+    # Começa todos os rótulos em zero para o cliente sempre receber as mesmas
+    # chaves, mesmo que ainda não exista tarefa naquele status/prioridade.
+    by_status = {s.value: 0 for s in TaskStatus}
+    by_priority = {p.value: 0 for p in TaskPriority}
+    for estado, quantidade in status_rows:
+        # `estado` pode vir como enum TaskStatus; `.value` normaliza para texto.
+        by_status[getattr(estado, "value", estado)] = quantidade
+    for prioridade, quantidade in priority_rows:
+        by_priority[getattr(prioridade, "value", prioridade)] = quantidade
+
+    return TaskStats(
+        total=sum(by_status.values()),
+        by_status=by_status,
+        by_priority=by_priority,
+    )
 
 
 @router.get(

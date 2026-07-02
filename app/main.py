@@ -53,8 +53,8 @@ from app.schemas import RootResponse
 # CommonMark + GFM (tabelas) + HTML inline são suportados.
 # ---------------------------------------------------------------------------
 APP_DESCRIPTION = """\
-Mini **SaaS de gerenciamento de tarefas** construído ao longo da disciplina
-**Computação em Nuvem** (N-CPU / UNINTER).
+**TaskFlow AI** — mini **SaaS de gerenciamento de tarefas** construído ao longo
+da disciplina **Computação em Nuvem** (N-CPU / UNINTER).
 
 Esta é a versão da **Semana 6** (versão `0.6.0`) — **a final da disciplina**:
 sobre toda a base anterior (CRUD, `.env`, upload S3/local, Kubernetes local,
@@ -132,7 +132,7 @@ implantada.
 
 ```bash
 curl -s http://localhost:8000/
-# {"name":"CloudTask AI SaaS","version":"0.1.0","docs":"/docs"}
+# {"name":"TaskFlow AI","version":"0.6.0","docs":"/docs"}
 ```
 
 **Python (httpx)**
@@ -175,7 +175,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
 # Instância principal do FastAPI.
 # ---------------------------------------------------------------------------
 app = FastAPI(
-    title="CloudTask AI SaaS",
+    title="TaskFlow AI",
     description=APP_DESCRIPTION,
     version=__version__,
     lifespan=lifespan,
@@ -299,8 +299,8 @@ async def add_security_headers(request: Request, call_next) -> Response:  # noqa
             "content": {
                 "application/json": {
                     "example": {
-                        "name": "CloudTask AI SaaS",
-                        "version": "0.1.0",
+                        "name": "TaskFlow AI",
+                        "version": "0.6.0",
                         "docs": "/docs",
                     }
                 }
@@ -317,10 +317,10 @@ def root() -> RootResponse:
     Example:
         >>> r = root()
         >>> r.name, r.docs
-        ('CloudTask AI SaaS', '/docs')
+        ('TaskFlow AI', '/docs')
     """
     return RootResponse(
-        name="CloudTask AI SaaS",
+        name="TaskFlow AI",
         version=__version__,
         docs="/docs",
     )

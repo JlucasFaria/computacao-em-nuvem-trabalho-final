@@ -102,3 +102,35 @@ def test_persiste_entre_requisicoes(client: TestClient) -> None:
     criada = _criar(client, title="Persistente")
     listada = client.get("/tasks").json()
     assert any(t["id"] == criada["id"] for t in listada)
+
+
+class TestStats:
+    """Endpoint EXTRA /tasks/stats (toque pessoal do projeto)."""
+
+    def test_stats_vazio(self, client: TestClient) -> None:
+        """Sem tarefas: total 0 e todas as chaves de status/prioridade em zero."""
+        body = client.get("/tasks/stats").json()
+        assert body["total"] == 0
+        assert body["by_status"] == {"pending": 0, "in_progress": 0, "done": 0}
+        assert body["by_priority"] == {"low": 0, "medium": 0, "high": 0}
+
+    def test_stats_conta_por_status_e_prioridade(self, client: TestClient) -> None:
+        """Agrega corretamente por status e por prioridade."""
+        _criar(client, title="A", status="pending", priority="high")
+        _criar(client, title="B", status="done", priority="high")
+        _criar(client, title="C", status="done", priority="low")
+
+        body = client.get("/tasks/stats").json()
+        assert body["total"] == 3
+        assert body["by_status"]["done"] == 2
+        assert body["by_status"]["pending"] == 1
+        assert body["by_status"]["in_progress"] == 0
+        assert body["by_priority"]["high"] == 2
+        assert body["by_priority"]["low"] == 1
+
+    def test_stats_nao_colide_com_rota_por_id(self, client: TestClient) -> None:
+        """/tasks/stats resolve para o resumo, não é tratado como /tasks/{id}."""
+        resp = client.get("/tasks/stats")
+        assert resp.status_code == 200
+        # se casasse com /{task_id}, "stats" viraria int inválido -> 422
+        assert "total" in resp.json()

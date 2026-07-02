@@ -111,6 +111,31 @@ class TaskRead(TaskBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class TaskStats(BaseModel):
+    """Estatísticas agregadas das tarefas (``GET /tasks/stats``).
+
+    Endpoint EXTRA (toque pessoal do projeto — não fazia parte da base). Dá uma
+    visão rápida de quantas tarefas existem e como elas se distribuem por
+    ``status`` e ``priority``, útil para um dashboard.
+
+    POR QUÊ agregar no banco (COUNT + GROUP BY) e não em Python: contar milhares
+    de linhas trazendo tudo para a memória da API seria caro; o banco faz a
+    contagem de forma muito mais eficiente e devolve só o resumo.
+    """
+
+    total: int = Field(..., description="Total de tarefas cadastradas.", examples=[7])
+    by_status: dict[str, int] = Field(
+        ...,
+        description="Contagem por estado (pending | in_progress | done).",
+        examples=[{"pending": 3, "in_progress": 2, "done": 2}],
+    )
+    by_priority: dict[str, int] = Field(
+        ...,
+        description="Contagem por prioridade (low | medium | high).",
+        examples=[{"low": 1, "medium": 4, "high": 2}],
+    )
+
+
 # ---------------------------------------------------------------------------
 # Schemas de Evento (Aula 10) — eventos/logs gravados em NoSQL (DynamoDB) ou
 # no fallback local JSON. Diferente de Task, NÃO há model SQLAlchemy: o evento
