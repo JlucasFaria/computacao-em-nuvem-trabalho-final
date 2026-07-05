@@ -1,8 +1,10 @@
 # Relatório final — TaskFlow AI (CloudTask AI SaaS)
 
-> Disciplina **Computação em Nuvem** — UNINTER. Projeto executado em **modo local**
-> (Docker), com os recursos de nuvem (EKS, RDS, S3, DynamoDB, CDK) estudados como
-> **conceito + código versionado**. Preencha os campos `[ ... ]` da identificação.
+> Disciplina **Computação em Nuvem** — UNINTER. Projeto validado **localmente**
+> (Docker + Kubernetes via Kind) **e com deploy real na AWS** — Amazon **S3**
+> (armazenamento) e um servidor **EC2** (aplicação rodando na nuvem, Anexo E). Os
+> recursos de nuvem não exercitados diretamente (EKS, RDS, DynamoDB, ALB) estão
+> cobertos como **código versionado** (CDK e manifests).
 
 ---
 
@@ -27,15 +29,15 @@ nuvem tem um **fallback local**, permitindo rodar o projeto inteiro sem AWS.
 
 ## 3. O que foi implementado (por semana)
 
-> Executado e validado em **modo local** (Docker Compose: API + PostgreSQL 16).
-> Evidências em `docs/entrega-final/evidencias/`.
+> Validado **localmente** (Docker Compose + Kubernetes/Kind) **e com deploy real na
+> AWS** (S3 + EC2). Evidências nos Anexos A–E e em `docs/entrega-final/evidencias/`.
 
 | Semana | Entreguei | Evidência (comando / endpoint) |
 | --- | --- | --- |
 | 1 — FastAPI + Docker | API FastAPI com `/`, `/health`, Swagger; imagem Docker + Compose | `GET /health` → `{"status":"ok"}`; `docker compose up` |
 | 2 — PostgreSQL + config | CRUD de tarefas no PostgreSQL; config via `.env`/pydantic-settings; readiness | `GET /health/ready` → `{"status":"ready","db":"ok"}`; `POST/GET/PUT/DELETE /tasks` |
-| 3 — S3 + Kind | Upload com backend selecionável (modo **local** validado); **Kubernetes rodando via Kind** (2 réplicas + auto-healing) | `POST /uploads`; `kubectl get pods -n cloudtask` (Anexo D) |
-| 4 — ECR + EKS | Script de build/push para ECR e manifests EKS (caminho AWS, como conceito) | `scripts/semana-04-ecr/`; `infra/k8s/aws/` |
+| 3 — S3 + Kind | Upload (local + **S3 real na AWS**, Anexo E); **Kubernetes rodando via Kind** (2 réplicas + auto-healing) | `POST /uploads`; bucket S3 na AWS; `kubectl get pods` (Anexos D/E) |
+| 4 — ECR + EKS | **Deploy real na nuvem** num servidor **EC2** (Anexo E); ECR/EKS cobertos como código (manifests em `infra/k8s/aws/`) | `http://15.229.42.56:8000/docs` (EC2); `scripts/semana-04-ecr/` |
 | 5 — HPA + DynamoDB | Eventos automáticos em create/update/delete (modo **local** JSON validado); HPA + teste de carga | `GET /events` → `task.created`; `infra/k8s/hpa.yaml` |
 | 6 — CDK + entrega | 7 stacks CDK (S3, ECR, VPC, DynamoDB, etc.), auth JWT, docs finais | `POST /auth/login` → JWT; `infra/cdk/` |
 | **Extra (meu toque pessoal)** | Rebranding **→ TaskFlow AI** + endpoint **`GET /tasks/stats`** (agregação) + 3 testes | `GET /tasks/stats` → total + contagem por status/prioridade |
@@ -63,10 +65,15 @@ nuvem tem um **fallback local**, permitindo rodar o projeto inteiro sem AWS.
               ./local_events ─┘   └────────────┘
 ```
 
+**O que subi de fato na AWS (Anexo E):** um bucket **Amazon S3** (privado +
+criptografado, para os uploads) e a aplicação rodando num servidor **Amazon EC2**
+(`t3.micro`), acessível pela internet pelo IP público — o **deploy em cloud** de
+verdade. Recursos destruídos após as evidências (custo ~US$ 0).
+
 **Arquitetura-alvo em produção (conceito, coberto no código/CDK):** a mesma API
 rodaria em **EKS** (imagem no **ECR**, HPA 2→5), atrás de **ALB + ACM** (HTTPS na
-borda), com **RDS** (tarefas), **S3** (uploads) e **DynamoDB** (eventos) — tudo
-descrito como código no **AWS CDK** (`infra/cdk/`). Ver `final-architecture.md`.
+borda), com **RDS** (tarefas) e **DynamoDB** (eventos) — tudo descrito como código
+no **AWS CDK** (`infra/cdk/`). Ver `final-architecture.md`.
 
 ## 5. Como executar (reprodutível)
 
@@ -101,8 +108,9 @@ docker compose exec -T api pytest       # 73 passed
 
 - **PostgreSQL como container, não RDS:** sem custo e mais simples para a demo.
   Trade-off: perco backup gerenciado, HA e patch automático que o RDS traria.
-- **Modo local para S3 e eventos (fallback):** permite rodar o projeto inteiro
-  **sem AWS/credenciais**. Trocar para S3/DynamoDB é só mudar o `.env`.
+- **Storage com dois modos (local ↔ S3):** o fallback local permite rodar sem
+  AWS; e o **S3 real foi exercitado na nuvem** (Anexo E). Alternar é só mudar o
+  `.env` (`STORAGE_MODE`). O mesmo padrão vale para eventos (JSON ↔ DynamoDB).
 - **Autenticação JWT no próprio backend:** simplificação didática. Em produção,
   um provedor de identidade dedicado (Cognito/OAuth) centralizaria o login.
 - **HTTPS na borda (conceito):** TLS terminaria no ALB/Edge, nunca no app —
@@ -113,11 +121,14 @@ docker compose exec -T api pytest       # 73 passed
 
 ## 7. Custos
 
-- **Recursos que cobraram:** **nenhum**. Execução 100% local (Docker na própria
-  máquina).
-- **Estimativa do período:** **US$ 0,00**.
-- **Confirmação de limpeza:** não se aplica — nada foi provisionado na AWS,
-  portanto não há recurso cobrável para destruir. Sweep detalhado no
+- **Recursos AWS provisionados:** um bucket **S3** (1 objeto de 1.1 MB) e uma
+  instância **EC2 `t3.micro`** (Amazon Linux 2023) — ambos **elegíveis ao Free
+  Tier** e ligados por menos de 1 hora.
+- **Estimativa do período:** **≈ US$ 0,00** (dentro do Free Tier; recursos ligados
+  por poucos minutos).
+- **Confirmação de limpeza:** ✅ **feita** — a instância EC2 foi **encerrada
+  (terminated)** e o bucket S3 foi **esvaziado e excluído** logo após coletar as
+  evidências (Anexo E). Nenhum recurso cobrável ficou ativo. Detalhes no
   `deployment-checklist-preenchido.md`.
 
 ## 8. LGPD e segurança
@@ -128,8 +139,10 @@ docker compose exec -T api pytest       # 73 passed
   (verificado); **nenhuma chave AWS real** no repositório. A senha `admin#123` é
   credencial de **demo** documentada.
 - **Direitos do titular:** acesso via `GET /tasks`, exclusão via `DELETE /tasks`.
-- **Em produção real ficaria pendente:** TLS na borda (ACM), criptografia em
-  repouso (S3/RDS), segredos no Secrets Manager, roles IAM de menor privilégio.
+- **Já aplicado na AWS:** bucket **S3 privado** (Block Public Access) + **criptografia
+  em repouso SSE-S3** (Anexo E).
+- **Em produção real ficaria pendente:** TLS na borda (ACM), criptografia do banco
+  (RDS), segredos no Secrets Manager, roles IAM de menor privilégio em todos os serviços.
 - Detalhes no `lgpd-checklist-preenchido.md`.
 
 ## 9. Dificuldades e aprendizados
@@ -145,6 +158,16 @@ docker compose exec -T api pytest       # 73 passed
   consegui rodar e demonstrar tudo **sem gastar 1 centavo** na AWS.
 - **Cuidado com segredos:** verifiquei de fato (não "no chute") que nada sensível
   foi para o git antes de publicar o repositório.
+- **Deploy em cloud na prática (EC2):** subi a aplicação num servidor EC2 real
+  (security group liberando a porta, conexão pelo navegador via EC2 Instance
+  Connect, `git clone` + Docker). Vi a diferença entre "rodar local" e "estar no
+  ar na internet" por um IP público.
+- **Relógio e assinatura AWS:** todos os recursos davam "Acesso negado" até eu
+  descobrir que o **relógio do Windows estava ~15 min atrasado** — a AWS rejeita a
+  assinatura das requisições fora da janela de tempo (*Signature expired*).
+  Sincronizar a hora resolveu tudo. (Lição: nem todo "acesso negado" é permissão.)
+- **Custo sob controle:** usei só recursos Free Tier e **destruí tudo** logo após
+  as evidências — responsabilidade com custos é parte do trabalho em nuvem.
 
 ## 10. Anexos
 
@@ -433,10 +456,11 @@ publicamente:
 
 # Checklist LGPD + segurança — TaskFlow AI (PREENCHIDO)
 
-> Preenchido por **João Lucas** em 02/07/2026. Projeto executado em **modo local**
-> (Docker, sem AWS). Itens específicos de nuvem são marcados como *"não se aplica
-> — modo local"* com a explicação de **como seria em produção real**, mostrando
-> entendimento do conceito. Baseado em `lgpd-checklist.md` (template do professor).
+> Preenchido por **João Lucas**. Projeto validado **localmente** (Docker + Kind)
+> **e com deploy real na AWS** (S3 + EC2 — Anexo E). Itens de S3/EC2 estão marcados
+> como **feitos**; os recursos não exercitados (RDS, EKS) ficam como *"não se
+> aplica"* com a explicação de **como seria em produção**. Baseado em
+> `lgpd-checklist.md` (template do professor).
 
 ---
 
@@ -466,17 +490,17 @@ publicamente:
       aplica TLS localmente.* Em produção real, o TLS termina na **borda** (Edge
       Caddy com cert ACME, ou ALB + ACM) — a API nunca administra certificado.
       Conceito coberto em `docs/conceitos/https-tls.md`.
-- [~] **Em repouso**: disco local sem criptografia (dev). Em produção:
-      S3 (`S3_MANAGED`), RDS (encryption at rest), DynamoDB (padrão) — todos com
-      criptografia ativa.
+- [x] **Em repouso**: o bucket **S3 real foi criado com criptografia SSE-S3**
+      ativa (Anexo E). Localmente o disco não é criptografado (dev). Em produção o
+      RDS/DynamoDB também teriam criptografia at-rest.
 - [x] **Segredos fora do código/git**: **verificado** — `.env` está no
       `.gitignore` e **não** é rastreado (`git ls-files` não lista `.env`); nenhuma
       chave AWS real (`AKIA…`) no repositório. A senha de demo `admin#123` é uma
       **simplificação didática** documentada (default em `config.py`); em produção
       viria de Secrets Manager / SSM e nunca seria fixa.
-- [~] **Bucket S3 privado (Block Public Access)**: não se aplica (modo local). As
-      stacks CDK (`infra/cdk/`) criam o bucket **privado e criptografado** —
-      conceito coberto.
+- [x] **Bucket S3 privado (Block Public Access)**: **feito** — o bucket real na AWS
+      foi criado com **Block Public Access** ligado (Anexo E). As stacks CDK
+      (`infra/cdk/`) também descrevem o bucket privado e criptografado.
 - [~] **Credenciais temporárias (roles)**: não se aplica localmente. Em AWS, o
       EC2/EKS usa **roles** (sem chave fixa) — ver `infra/cdk` e docs.
 - [x] **Menor privilégio**: a aplicação acessa só o banco/armazenamento que
@@ -502,8 +526,8 @@ publicamente:
 ## 6. Higiene de projeto
 
 - [x] **Nenhuma conta AWS real ou segredo commitado**: verificado (seção 3).
-- [x] **Recursos de teste destruídos**: não se aplica — nada foi provisionado na
-      AWS (modo local). Sem recurso órfão cobrável.
+- [x] **Recursos de teste destruídos**: **feito** — a instância EC2 foi encerrada e
+      o bucket S3 esvaziado/excluído após as evidências (Anexo E). Sem recurso órfão.
 - [x] **README/docs não expõem credenciais internas**: só a conta de **demo**
       documentada (`admin`/`admin#123`), intencional para a avaliação.
 
@@ -517,21 +541,22 @@ como seria em produção).
 
 # Checklist de deploy + custos — TaskFlow AI (PREENCHIDO)
 
-> Preenchido por **João Lucas** em 02/07/2026. Execução em **modo local** (Docker
-> Compose: API FastAPI + PostgreSQL 16). **Nada foi provisionado na AWS**, então
-> os blocos de nuvem (EKS/RDS/ELB/CDK) são marcados *"não se aplica"* com a
-> explicação de como seriam em produção. Baseado em `deployment-checklist.md`.
+> Preenchido por **João Lucas**. Rodou **localmente** (Docker + Kind) **e com deploy
+> real na AWS**: bucket **S3** + servidor **EC2** (Anexo E), ambos **provisionados,
+> demonstrados e destruídos**. Os blocos que usam serviços não exercitados
+> (EKS/RDS/ELB) ficam *"não se aplica"* com a explicação de produção. Baseado em
+> `deployment-checklist.md`.
 
 ---
 
 ## Antes do deploy
 
-- [~] Credenciais AWS válidas (`aws sts get-caller-identity`): **não se aplica** —
-      execução local, sem AWS.
-- [~] Região correta (`us-east-1`): não se aplica (local).
-- [~] Imagem no ECR: não se aplica. A imagem foi construída **localmente**
-      (`docker compose build`, `cloudtask-api:dev`). Em produção iria para o ECR
-      via `scripts/semana-04-ecr/build-push-ecr.sh`.
+- [x] Credenciais AWS válidas: **sim** — conta AWS real (`7303-3524-6337`), login
+      no Console para criar S3 e EC2 (Anexo E).
+- [x] Região definida: **sa-east-1** (América do Sul / São Paulo), usada no S3 e no EC2.
+- [~] Imagem no ECR: **não se aplica** — no EC2 a imagem foi **construída na própria
+      instância** (`docker build` a partir do repositório clonado do GitHub). Em
+      produção iria para o ECR via `scripts/semana-04-ecr/build-push-ecr.sh`.
 - [x] `.env` revisado: criado a partir de `.env.example`, sem placeholders quebrados.
 - [x] Banco definido: **PostgreSQL 16 como container** (serviço `db` do Compose),
       ciente do trade-off vs. RDS (RDS traria backup gerenciado, HA, patch
@@ -541,8 +566,11 @@ como seria em produção).
 
 - [x] Aplicação sobe sem erro: `docker compose up --build -d` → `cloudtask-api` +
       `cloudtask-db` (este último `healthy`).
-- [~] Cluster EKS `Ready` / metrics-server / `kubectl apply`: **não se aplica**
-      (local). Manifests existem em `infra/k8s/aws/` para o caminho AWS.
+- [x] **Kubernetes (Kind)**: cluster local com Deployment `api` **2/2** réplicas +
+      auto-healing demonstrado (Anexo D). *(EKS gerenciado fica como conceito —
+      manifests em `infra/k8s/aws/`.)*
+- [x] **Deploy em cloud (EC2)**: aplicação rodando num servidor **EC2** e acessível
+      pela internet em `http://15.229.42.56:8000/docs` (Anexo E).
 - [x] Serviço acessível: `curl http://localhost:8000/health` → `200`;
       `/health/ready` → `{"status":"ready","db":"ok"}` (readiness checou o Postgres).
 
@@ -560,25 +588,31 @@ como seria em produção).
 
 ## 🔥 Depois (destruir — OBRIGATÓRIO na nuvem)
 
-- [~] Todos os itens (`kubectl delete`, `eksctl delete cluster`, apagar RDS/
-      DynamoDB/S3, `cdk destroy`): **não se aplica** — nada foi criado na AWS,
-      portanto **não há recurso cobrável para destruir**.
-- [x] Ambiente local encerrado quando necessário: `docker compose down`
-      (usar `down -v` zera o volume `pgdata`).
+- [x] **Instância EC2 encerrada** (*terminated*) após as evidências — servidor,
+      disco (EBS) e IP público liberados (Anexo E / print de "Encerrado").
+- [x] **Bucket S3 esvaziado e excluído** — *"Nenhum bucket"* na lista ao final.
+- [~] EKS/RDS/ELB/DynamoDB/`cdk destroy`: **não se aplica** — não foram provisionados
+      (ficaram como conceito/código).
+- [x] Ambiente local encerrado (`docker compose down`; cluster Kind removido com
+      `kind delete cluster`).
 
 ## Sweep final (tudo vazio = zero cobrança)
 
-- [~] Comandos de varredura (EKS/EC2/ELB/NAT/EIP/RDS): **não se aplica** (local).
-      Como nada foi provisionado, o resultado de todos seria vazio por definição.
-- [x] **Custo do período: US$ 0,00** — execução 100% local, sem uso de AWS.
+- [x] **EC2:** nenhuma instância ativa (a única foi encerrada).
+- [x] **S3:** nenhum bucket na conta.
+- [~] ELB/NAT/EIP/RDS: nunca foram criados.
+- [x] **Custo do período: ≈ US$ 0,00** — recursos Free Tier, ligados por poucos
+      minutos e destruídos no mesmo dia.
 
 ---
 
 ## Resumo de custos
 
-| Recurso | Cobrou? | Observação |
-| --- | --- | --- |
-| Tudo (execução local) | **Não** | Docker na própria máquina; **US$ 0,00** |
-| EKS / EC2 / RDS / ELB / S3 / DynamoDB | Não | Não provisionados — caminho AWS ficou como **conceito** |
+| Recurso | Provisionado? | Situação final | Custo |
+| --- | --- | --- | --- |
+| **Amazon S3** (bucket + 1 objeto) | Sim (Free Tier) | **Excluído** | ≈ US$ 0 |
+| **Amazon EC2** (`t3.micro`) | Sim (Free Tier) | **Encerrado** | ≈ US$ 0 |
+| Execução local (Docker/Kind) | — | encerrada | US$ 0 |
+| EKS / RDS / ELB / DynamoDB | Não | conceito/código | US$ 0 |
 
-**Legenda:** `[x]` feito · `[~]` não se aplica ao modo local (explicado).
+**Legenda:** `[x]` feito/verificado · `[~]` não se aplica (explicado).
