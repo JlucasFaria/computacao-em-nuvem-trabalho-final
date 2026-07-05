@@ -8,12 +8,12 @@
 
 ## 1. Identificação
 
-- **Aluno(a):** `[SEU NOME COMPLETO]`
-- **RU / matrícula:** `[SEU RU]`
+- **Aluno(a):** João Lucas Faria Filho
+- **RU / matrícula:** 4994592
 - **Disciplina:** Computação em Nuvem — UNINTER
 - **Repositório:** https://github.com/JlucasFaria/computacao-em-nuvem-trabalho-final
   (branch `joaoLucas-trabalho-final`)
-- **Data:** `[dd/mm/aaaa]`
+- **Data:** 04/07/2026
 
 ## 2. Resumo do projeto
 
@@ -34,7 +34,7 @@ nuvem tem um **fallback local**, permitindo rodar o projeto inteiro sem AWS.
 | --- | --- | --- |
 | 1 — FastAPI + Docker | API FastAPI com `/`, `/health`, Swagger; imagem Docker + Compose | `GET /health` → `{"status":"ok"}`; `docker compose up` |
 | 2 — PostgreSQL + config | CRUD de tarefas no PostgreSQL; config via `.env`/pydantic-settings; readiness | `GET /health/ready` → `{"status":"ready","db":"ok"}`; `POST/GET/PUT/DELETE /tasks` |
-| 3 — S3 + Kind | Upload com backend selecionável (modo **local** validado); manifests Kubernetes | `POST /uploads` → `{"storage_mode":"local"}`; `infra/k8s/` |
+| 3 — S3 + Kind | Upload com backend selecionável (modo **local** validado); **Kubernetes rodando via Kind** (2 réplicas + auto-healing) | `POST /uploads`; `kubectl get pods -n cloudtask` (Anexo D) |
 | 4 — ECR + EKS | Script de build/push para ECR e manifests EKS (caminho AWS, como conceito) | `scripts/semana-04-ecr/`; `infra/k8s/aws/` |
 | 5 — HPA + DynamoDB | Eventos automáticos em create/update/delete (modo **local** JSON validado); HPA + teste de carga | `GET /events` → `task.created`; `infra/k8s/hpa.yaml` |
 | 6 — CDK + entrega | 7 stacks CDK (S3, ECR, VPC, DynamoDB, etc.), auth JWT, docs finais | `POST /auth/login` → JWT; `infra/cdk/` |
@@ -151,7 +151,9 @@ docker compose exec -T api pytest       # 73 passed
 - [x] `lgpd-checklist-preenchido.md` preenchido
 - [x] `deployment-checklist-preenchido.md` (custos/limpeza) preenchido
 - [x] Evidências: `evidencias/01-smoke-test-local.md`, `evidencias/02-toque-pessoal.md`
-- [ ] Prints do Swagger (`http://localhost:8000/docs`) — **anexar na hora de gerar o PDF**
+- [x] Prints do Swagger (`http://localhost:8000/docs`) — ver **Anexo C**
+- [x] Prints de **Kubernetes funcionando + Containers Docker** — ver **Anexo D**
+- [x] Prints de **Nuvem AWS: S3 + Deploy em cloud (EC2)** — ver **Anexo E**
 
 
 <div style="page-break-before: always;"></div>
@@ -171,6 +173,11 @@ docker compose ps                 # cloudtask-api + cloudtask-db (healthy)
 ```
 
 ## 1. Metadados, liveness e readiness
+
+> **Nota:** este smoke test foi feito no **Passo 1**, **antes** do rebranding.
+> Por isso o `GET /` ainda responde `"CloudTask AI SaaS"`. A partir do **Passo 2**
+> (ver Anexo B) o nome passou a ser **TaskFlow AI** — como comprova o print da
+> home no Anexo C.
 
 ```text
 GET /              -> {"name":"CloudTask AI SaaS","version":"0.6.0","docs":"/docs"}
@@ -282,6 +289,144 @@ docker compose exec -T api pytest
 ```
 
 Toda a suíte continua verde — a customização não quebrou nada da base.
+
+
+<div style="page-break-before: always;"></div>
+
+# Anexo C — Prints do Swagger (evidência visual)
+
+> Capturas reais da interface Swagger (`http://localhost:8000/docs`) com a API
+> **TaskFlow AI** rodando em modo local. Comprovam o funcionamento ponta a ponta:
+> home, autenticação JWT, CRUD, o endpoint novo `/tasks/stats` e os eventos.
+
+## C.1 — Página inicial do Swagger
+
+Título **TaskFlow AI** (versão `0.6.0`, OpenAPI 3.1) e a lista de endpoints.
+
+![Swagger home — TaskFlow AI](evidencias/prints/swagger-01-home.png)
+
+## C.2 — Autenticação JWT (`POST /auth/login`)
+
+Requisição com as credenciais de demo (`admin` / `admin#123`):
+
+![Login — requisição](evidencias/prints/swagger-02-login-requisicao.png)
+
+Resposta **200** com o `access_token` (usado no botão *Authorize* do Swagger):
+
+![Login — resposta 200 com token](evidencias/prints/swagger-02-login-resposta.png)
+
+## C.3 — Criar tarefa (`POST /tasks`)
+
+Requisição autenticada (cadeado fechado = rota protegida por token):
+
+![Criar tarefa — requisição](evidencias/prints/swagger-03-criar-requisicao.png)
+
+Resposta **201** — tarefa criada, já com `id`, `status` e datas preenchidos:
+
+![Criar tarefa — resposta 201](evidencias/prints/swagger-03-criar-resposta.png)
+
+## C.4 — Estatísticas (`GET /tasks/stats`) — endpoint novo (toque pessoal) ⭐
+
+Resposta **200** com `total`, `by_status` e `by_priority` agregados no banco:
+
+![Stats — resposta 200](evidencias/prints/swagger-04-stats-resposta.png)
+
+Documentação do endpoint no Swagger (descrição + schema de resposta):
+
+![Stats — schema/documentação](evidencias/prints/swagger-04-stats-schema.png)
+
+## C.5 — Eventos automáticos (`GET /events`)
+
+Resposta **200** listando vários eventos `task.created` gerados automaticamente
+a cada criação de tarefa (integra CRUD + event store):
+
+![Eventos — resposta 200](evidencias/prints/swagger-05-eventos-resposta.png)
+
+Documentação do endpoint de eventos (schema de resposta):
+
+![Eventos — schema/documentação](evidencias/prints/swagger-05-eventos-schema.png)
+
+
+<div style="page-break-before: always;"></div>
+
+# Anexo D — Kubernetes e Containers Docker (evidência visual)
+
+> A aplicação **TaskFlow AI** empacotada em **container Docker** e orquestrada por
+> um cluster **Kubernetes real** (Kind — Kubernetes-in-Docker), rodando localmente
+> sem custo de nuvem. Detalhes em `evidencias/03-kubernetes-kind.md`.
+
+## D.1 — Aplicação servida PELO Kubernetes (NodePort `:30080`)
+
+O Swagger do **TaskFlow AI** respondendo pela porta `30080` — exposta pelo Service
+NodePort do cluster (note a URL `localhost:30080`, diferente da porta `8000` do
+Docker Compose):
+
+![Swagger servido pelo Kubernetes](evidencias/prints/k8s-swagger.png)
+
+## D.2 — Kubernetes funcionando (`kubectl get pods,deployments,svc`)
+
+Pods `Running`, Deployment `api` com **2 réplicas** (`2/2`, alta disponibilidade),
+Deployment `postgres` `1/1`, e o Service `api` do tipo **NodePort** `8000:30080`:
+
+![Pods, deployments e services no Kubernetes](evidencias/prints/k8s-pods.png)
+
+> O cluster também demonstrou **auto-healing**: ao deletar um pod da API, o
+> Kubernetes recriou outro automaticamente para manter as 2 réplicas
+> (log em `evidencias/03-kubernetes-kind.md`).
+
+## D.3 — Containers Docker (`docker ps`)
+
+Containers em execução: o nó do cluster **`cloudtask-control-plane`**
+(`kindest/node`) e os containers de apoio (`cloudtask-api`, `cloudtask-db`):
+
+![Containers Docker rodando](evidencias/prints/docker-containers.png)
+
+
+<div style="page-break-before: always;"></div>
+
+# Anexo E — Nuvem AWS (evidência de "uso de cloud")
+
+> Recursos criados numa conta **AWS** real (conta `7303-3524-6337`, região
+> **América do Sul / São Paulo — sa-east-1**), demonstrando uso de nuvem.
+> Os recursos foram **destruídos após a coleta das evidências** para não gerar
+> custo (ver `deployment-checklist-preenchido.md`).
+
+## E.1 — Amazon S3: bucket criado (privado + criptografado)
+
+Bucket **`taskflow-ai-uploads-jlucas`** criado na região de São Paulo. É onde o
+TaskFlow AI armazena os **uploads dos usuários** (endpoint `POST /uploads` com
+`STORAGE_MODE=s3`). Configurado com **Block Public Access** e **criptografia
+SSE-S3** (atende aos itens de segurança/LGPD):
+
+![Bucket S3 criado na AWS](evidencias/prints/aws-s3-bucket.png)
+
+## E.2 — Amazon S3: objeto enviado com sucesso
+
+Upload real de um arquivo (`cloud-system.png`, 1.1 MB) para o bucket — **"Upload
+bem-sucedido"**. Comprova o S3 armazenando objetos de verdade na nuvem:
+
+![Upload de arquivo no S3](evidencias/prints/aws-s3-upload.png)
+
+## E.3 — Deploy em cloud: aplicação rodando em Amazon EC2 ⭐
+
+A aplicação **TaskFlow AI** foi **implantada num servidor EC2 real** (instância
+`t3.micro`, Amazon Linux 2023, região São Paulo). No servidor, via Docker, subimos
+a API + PostgreSQL (`docker compose ps` mostrando os containers `Up`):
+
+![Containers rodando no servidor EC2](evidencias/prints/aws-ec2-containers.png)
+
+E o **Swagger do TaskFlow AI acessível pela internet** pelo **IP público da AWS**
+(`http://15.229.42.56:8000/docs`) — este é o **"Deploy em cloud"**: a aplicação
+não está mais só na máquina local, e sim rodando num servidor na nuvem, acessível
+publicamente:
+
+![TaskFlow AI rodando na nuvem (EC2, IP público)](evidencias/prints/aws-ec2-deploy.png)
+
+> **Passos do deploy (resumo):** instância EC2 (free tier) + security group
+> liberando a porta 8000 → conexão via EC2 Instance Connect → instalação de Docker
+> + git → `git clone` do repositório do GitHub → build da imagem e `docker compose up`.
+> **Todos os recursos AWS foram destruídos após a coleta das evidências** (ver
+> `deployment-checklist-preenchido.md`).
 
 
 <div style="page-break-before: always;"></div>

@@ -1,3 +1,14 @@
+<!-- ============================================================= -->
+<!-- Trabalho final — João Lucas Faria Filho (RU 4994592)          -->
+<!-- Este projeto foi rebatizado como TaskFlow AI (toque pessoal): -->
+<!-- rebranding do CloudTask AI SaaS + novo endpoint GET /tasks/stats. -->
+<!-- Relatório e evidências em docs/entrega-final/ENTREGA-COMPLETA.md -->
+<!-- ============================================================= -->
+
+> 🎓 **TaskFlow AI** — entrega final da disciplina, baseada no projeto
+> **CloudTask AI SaaS**. Rebranding + endpoint `GET /tasks/stats` (toque pessoal).
+> Relatório completo em [`docs/entrega-final/ENTREGA-COMPLETA.md`](docs/entrega-final/ENTREGA-COMPLETA.md).
+
 <!-- Área do Banner -->
 <div align="center" style="background-color: white; max-width: 70%;">
   <img alt="BANNER do repositório CloudTask AI SaaS — disciplina Computação em Nuvem" title="Banner_CloudTask_AI_SaaS" src=".readme_docs/Banner_Github_NCPU.png" width="100%" />
